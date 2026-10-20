@@ -1,0 +1,42 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: catalog
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  mvc:
+    problemdetails:
+      enabled: true
+
+app:
+  jwt:
+    issuer: catalog-api
+    ttl: 15m
+    active-kid: key-1
+    keys:
+      - kid: key-1
+        public-key: classpath:keys/app.pub
+        private-key: classpath:keys/app.key
+      - kid: key-2
+        public-key: classpath:keys/public_key.pem
+        private-key: classpath:keys/private_key.pem
+  seed-admin:
+    enabled: true
+    username: admin
+    password: ${ADMIN_PASSWORD:Admin#Catalog2026}
+  rate-limit:
+    limit-per-minute: 10
+
+springdoc:
+  api-docs:
+    version: openapi_3_1
+  swagger-ui:
+    path: /swagger-ui.html
+    persist-authorization: true
+  paths-to-match:
+    - /api/**
+    - /.well-known/**

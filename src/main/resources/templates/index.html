@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Catalog API - JWT & OAuth2 Security Dashboard</title>
+    <!-- Google Fonts Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" th:href="@{/css/style.css}" href="/css/style.css">
+</head>
+<body>
+
+    <!-- Top Navigation Bar -->
+    <header class="navbar">
+        <a href="/" class="brand">
+            <div class="brand-logo">C</div>
+            <div class="brand-text">
+                <h1>Catalog Security Portal</h1>
+                <span>Spring Security 7 &bull; OAuth2 Resource Server</span>
+            </div>
+        </a>
+
+        <div class="nav-actions">
+            <span class="badge badge-online">Port: <strong th:text="${serverPort}">8088</strong></span>
+            <span class="badge badge-kid">Active Key: <strong th:text="${activeKid}">key-1</strong></span>
+            <a href="/swagger-ui.html" target="_blank" class="btn-nav-link">Swagger UI &rarr;</a>
+            <a href="/.well-known/jwks.json" target="_blank" class="btn-nav-link">JWKS Set &rarr;</a>
+        </div>
+    </header>
+
+    <!-- Main Content Grid -->
+    <main class="container">
+        <!-- Left Column: Authentication & Token Management -->
+        <aside class="sidebar">
+            
+            <!-- Guest Card: Login Form -->
+            <section class="card" id="guestPanel">
+                <div class="card-title">
+                    <span>Đăng nhập hệ thống</span>
+                    <span class="badge badge-kid">JWT RS256</span>
+                </div>
+                <form id="loginForm">
+                    <div class="form-group">
+                        <label for="loginUsername">Tên đăng nhập</label>
+                        <input type="text" id="loginUsername" class="form-input" th:value="${defaultAdminUser}" required placeholder="admin">
+                    </div>
+                    <div class="form-group">
+                        <label for="loginPassword">Mật khẩu</label>
+                        <input type="password" id="loginPassword" class="form-input" value="Admin#Catalog2026" required placeholder="Admin#Catalog2026">
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block">Đăng nhập</button>
+                    <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem;">
+                        <button type="button" class="btn btn-secondary btn-sm" style="flex: 1;" onclick="fillLogin('admin', 'Admin#Catalog2026')">Admin Demo</button>
+                        <button type="button" class="btn btn-secondary btn-sm" style="flex: 1;" onclick="fillLogin('user', 'User#Catalog2026')">User Demo</button>
+                    </div>
+                    <p style="font-size: 0.75rem; color: var(--text-dim); margin-top: 0.75rem; text-align: center;">
+                        Mặc định: <code>admin</code> (Toàn quyền) &bull; <code>user</code> (Chỉ xem)
+                    </p>
+                </form>
+            </section>
+
+            <!-- Authenticated User Card -->
+            <section class="card" id="userPanel" style="display: none;">
+                <div class="card-title">
+                    <span>Phiên làm việc</span>
+                    <span class="badge badge-online">Active</span>
+                </div>
+
+                <div class="user-profile">
+                    <div class="user-avatar" id="userAvatarDisplay">A</div>
+                    <div class="user-details">
+                        <h3 id="userNameDisplay">admin</h3>
+                        <div class="user-badges" id="userRolesDisplay">
+                            <!-- Roles dynamically added -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Token Countdown Timer -->
+                <div class="token-meter-container">
+                    <div class="token-meter-header">
+                        <span>Access Token hiệu lực:</span>
+                        <strong id="tokenTimerText" style="color: #38bdf8; font-family: monospace;">15:00</strong>
+                    </div>
+                    <div class="token-progress">
+                        <div class="token-progress-bar" id="tokenProgressBar" style="width: 100%;"></div>
+                    </div>
+                </div>
+
+                <!-- Session Actions -->
+                <div class="action-grid">
+                    <button class="btn btn-secondary btn-sm" onclick="rotateToken(false)" title="Đổi lấy cặp Access + Refresh token mới (R2)">
+                        &#128259; Refresh Token
+                    </button>
+                    <button class="btn btn-secondary btn-sm" onclick="openChangePasswordModal()" title="Đổi mật khẩu người dùng (R6)">
+                        &#128273; Đổi mật khẩu
+                    </button>
+                    <button class="btn btn-warning btn-sm" onclick="handleLogout()" title="Đưa JTI vào blacklist và thu hồi refresh token (R4)">
+                        &#128682; Đăng xuất
+                    </button>
+                    <button class="btn btn-danger btn-sm" onclick="handleLogoutAll()" title="Thu hồi toàn bộ token trên mọi thiết bị (R5)">
+                        &#9889; Logout All
+                    </button>
+                    <button class="btn btn-secondary btn-sm" style="grid-column: span 2; border: 1px dashed var(--accent-rose); color: var(--accent-rose);" onclick="simulateTokenReuseAttack()" title="Mô phỏng hacker dùng lại Refresh Token cũ để test tính năng R3">
+                        &#9888;&#65039; Test Tái sử dụng Refresh Token (R3)
+                    </button>
+                    <button id="btnLockUserDemo" class="btn btn-secondary btn-sm" style="grid-column: span 2; display: none;" onclick="handleLockDemoUser()" title="ADMIN khóa tài khoản người dùng và vô hiệu hóa toàn bộ token (R6)">
+                        &#128274; ADMIN: Khóa tài khoản Demo (user)
+                    </button>
+                </div>
+            </section>
+
+            <!-- Live JWT Inspector -->
+            <section class="card inspector-card">
+                <div class="card-title">
+                    <span>JWT Inspector (RS256)</span>
+                    <span class="badge badge-kid">Live Claims</span>
+                </div>
+                <div class="code-box" id="tokenInspector">// Đăng nhập để phân tích claims của Access Token</div>
+            </section>
+        </aside>
+
+        <!-- Right Column: Product Catalog -->
+        <section class="content">
+            <div class="card">
+                <div class="catalog-header">
+                    <div class="catalog-title">
+                        <h2>Danh mục sản phẩm</h2>
+                        <p>Dữ liệu Catalog API bảo vệ 2 lớp: SecurityFilterChain &amp; @PreAuthorize</p>
+                    </div>
+                    <button id="btnAddProduct" class="btn btn-primary" onclick="openAddProduct()">
+                        + Thêm sản phẩm
+                    </button>
+                </div>
+
+                <div class="product-table-wrapper">
+                    <table class="product-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 60px;">ID</th>
+                                <th>Sản phẩm &amp; Mô tả</th>
+                                <th style="width: 160px;">Đơn giá</th>
+                                <th style="width: 120px;">Ngày tạo</th>
+                                <th style="width: 130px; text-align: right;">Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody id="productTableBody">
+                            <!-- Products dynamically loaded -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Modal Thêm / Sửa Sản phẩm -->
+    <div class="modal-overlay" id="productModal">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h3 id="modalProductTitle" style="font-weight: 700;">Thêm sản phẩm mới</h3>
+                <button class="modal-close" onclick="closeModal('productModal')">&times;</button>
+            </div>
+            <form id="productForm">
+                <input type="hidden" id="productId">
+                <div class="form-group">
+                    <label for="productName">Tên sản phẩm</label>
+                    <input type="text" id="productName" class="form-input" required placeholder="Ví dụ: Chuột không dây Logitech">
+                </div>
+                <div class="form-group">
+                    <label for="productDescription">Mô tả sản phẩm</label>
+                    <input type="text" id="productDescription" class="form-input" placeholder="Ví dụ: Chuột quang 2.4GHz không ồn">
+                </div>
+                <div class="form-group">
+                    <label for="productPrice">Đơn giá (VNĐ)</label>
+                    <input type="number" step="1000" id="productPrice" class="form-input" required placeholder="Ví dụ: 350000">
+                </div>
+                <div style="display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.5rem;">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('productModal')">Hủy</button>
+                    <button type="submit" class="btn btn-primary">Lưu sản phẩm</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Đổi mật khẩu -->
+    <div class="modal-overlay" id="passwordModal">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h3 style="font-weight: 700;">Đổi mật khẩu người dùng</h3>
+                <button class="modal-close" onclick="closeModal('passwordModal')">&times;</button>
+            </div>
+            <form id="passwordForm">
+                <div class="form-group">
+                    <label for="currentPassword">Mật khẩu hiện tại</label>
+                    <input type="password" id="currentPassword" class="form-input" required placeholder="Nhập mật khẩu đang dùng">
+                </div>
+                <div class="form-group">
+                    <label for="newPassword">Mật khẩu mới (Tối thiểu 6 ký tự)</label>
+                    <input type="password" id="newPassword" class="form-input" required minlength="6" placeholder="Nhập mật khẩu mới">
+                </div>
+                <div style="display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.5rem;">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('passwordModal')">Hủy</button>
+                    <button type="submit" class="btn btn-primary">Xác nhận đổi</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Toast Notifications Container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script th:src="@{/js/app.js}" src="/js/app.js"></script>
+</body>
+</html>

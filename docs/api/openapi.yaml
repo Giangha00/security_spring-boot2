@@ -1,0 +1,528 @@
+openapi: 3.1.0
+info:
+  title: Catalog API với JWT và Spring Security 7
+  description: "Hệ thống quản lý phiên đăng nhập an toàn, refresh token rotation và\
+    \ OAuth2 Resource Server"
+  version: 2.0.0
+servers:
+- url: http://localhost
+  description: Generated server url
+tags:
+- name: Product
+  description: Quản lý danh mục sản phẩm Catalog API
+- name: Auth
+  description: "Cấp, làm mới, thu hồi token và quản lý phiên đăng nhập an toàn"
+- name: JWKS
+  description: Công bố danh sách khóa công khai đang hiệu lực
+- name: Admin
+  description: Quản trị người dùng & khóa tài khoản (R6)
+paths:
+  /api/v1/products/{id}:
+    get:
+      tags:
+      - Product
+      summary: Xem chi tiết một sản phẩm theo ID (công khai)
+      operationId: getById
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        "200":
+          description: Tìm thấy sản phẩm
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ProductResponse"
+        "404":
+          description: Không tìm thấy sản phẩm
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+    put:
+      tags:
+      - Product
+      summary: Cập nhật sản phẩm (Yêu cầu quyền SCOPE_product:write)
+      operationId: update
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductRequest"
+        required: true
+      responses:
+        "200":
+          description: Cập nhật sản phẩm thành công
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ProductResponse"
+        "400":
+          description: Dữ liệu không hợp lệ
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "401":
+          description: Thiếu token hoặc token không hợp lệ
+        "403":
+          description: Token không có quyền SCOPE_product:write
+        "404":
+          description: Không tìm thấy sản phẩm
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+      security:
+      - bearerAuth: []
+    delete:
+      tags:
+      - Product
+      summary: Xóa sản phẩm (Yêu cầu quyền SCOPE_product:write)
+      operationId: delete
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        "204":
+          description: Xóa sản phẩm thành công
+        "401":
+          description: Thiếu token hoặc token không hợp lệ
+        "403":
+          description: Token không có quyền SCOPE_product:write
+        "404":
+          description: Không tìm thấy sản phẩm
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+      security:
+      - bearerAuth: []
+  /api/v1/products:
+    get:
+      tags:
+      - Product
+      summary: Xem toàn bộ danh sách sản phẩm (công khai)
+      operationId: getAll
+      responses:
+        "200":
+          description: Lấy danh sách sản phẩm thành công
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProductResponse"
+    post:
+      tags:
+      - Product
+      summary: Tạo sản phẩm mới (Yêu cầu quyền SCOPE_product:write)
+      operationId: create
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductRequest"
+        required: true
+      responses:
+        "201":
+          description: Đã tạo sản phẩm thành công
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ProductResponse"
+        "400":
+          description: Dữ liệu không hợp lệ
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "401":
+          description: "Thiếu token, token hết hạn hoặc sai chữ ký"
+        "403":
+          description: Token hợp lệ nhưng không có quyền SCOPE_product:write
+      security:
+      - bearerAuth: []
+  /api/auth/token:
+    post:
+      tags:
+      - Auth
+      summary: Đổi username/mật khẩu lấy access token và refresh token (R1)
+      operationId: token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+        required: true
+      responses:
+        "200":
+          description: Cấp token thành công
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+        "400":
+          description: Dữ liệu yêu cầu không hợp lệ
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "401":
+          description: Sai username hoặc mật khẩu
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "429":
+          description: Quá giới hạn tần suất 10 request/phút
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+  /api/auth/refresh:
+    post:
+      tags:
+      - Auth
+      summary: "Xoay vòng refresh token để lấy cặp token mới (R2, R3)"
+      operationId: refresh
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshTokenRequest"
+        required: true
+      responses:
+        "200":
+          description: Làm mới token thành công
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+        "400":
+          description: Dữ liệu yêu cầu không hợp lệ
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "401":
+          description: "Refresh token không hợp lệ, đã hết hạn hoặc bị dùng lại (REFRESH_TOKEN_REUSED)"
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "429":
+          description: Quá giới hạn tần suất 10 request/phút
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+  /api/auth/logout:
+    post:
+      tags:
+      - Auth
+      summary: Đăng xuất thiết bị hiện tại (R4)
+      operationId: logout
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LogoutRequest"
+      responses:
+        "204":
+          description: "Đăng xuất thành công, access token đã bị đưa vào danh sách\
+            \ thu hồi"
+        "401":
+          description: Chưa xác thực hoặc token không hợp lệ
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+      security:
+      - bearerAuth: []
+  /api/auth/logout-all:
+    post:
+      tags:
+      - Auth
+      summary: Đăng xuất mọi thiết bị (R5)
+      operationId: logoutAll
+      responses:
+        "204":
+          description: Đã thu hồi tất cả refresh token và làm mất hiệu lực toàn bộ
+            access token
+        "401":
+          description: Chưa xác thực hoặc token không hợp lệ
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+      security:
+      - bearerAuth: []
+  /api/auth/change-password:
+    post:
+      tags:
+      - Auth
+      summary: Đổi mật khẩu người dùng (R6)
+      operationId: changePassword
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePasswordRequest"
+        required: true
+      responses:
+        "204":
+          description: "Đổi mật khẩu thành công, toàn bộ token cũ đã mất hiệu lực"
+        "400":
+          description: Mật khẩu mới không hợp lệ
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "401":
+          description: Mật khẩu hiện tại không đúng hoặc chưa xác thực
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+      security:
+      - bearerAuth: []
+  /api/admin/users/{username}/lock:
+    post:
+      tags:
+      - Admin
+      summary: ADMIN khóa tài khoản người dùng và vô hiệu hóa toàn bộ token (R6)
+      operationId: lockUser
+      parameters:
+      - name: username
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        "204":
+          description: "Khóa tài khoản thành công, toàn bộ token đã bị vô hiệu hóa"
+        "401":
+          description: Chưa xác thực hoặc token không hợp lệ
+        "403":
+          description: Không có quyền ADMIN
+        "404":
+          description: Không tìm thấy người dùng
+      security:
+      - bearerAuth: []
+  /api/auth/me:
+    get:
+      tags:
+      - Auth
+      summary: Xem thông tin token đang dùng
+      operationId: me
+      responses:
+        "200":
+          description: Lấy thông tin thành công
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/MeResponse"
+        "401":
+          description: "Token không hợp lệ, hết hạn hoặc đã bị thu hồi"
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+      security:
+      - bearerAuth: []
+  /.well-known/jwks.json:
+    get:
+      tags:
+      - JWKS
+      summary: Công bố các khóa công khai theo chuẩn JWK Set (R8)
+      operationId: jwks
+      responses:
+        "200":
+          description: Danh sách khóa công khai đang hiệu lực
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+components:
+  schemas:
+    ProductRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Tên sản phẩm
+          example: Chuột không dây
+          maxLength: 120
+          minLength: 0
+        description:
+          type: string
+          description: Mô tả sản phẩm
+          example: 2.4GHz
+          maxLength: 500
+          minLength: 0
+        price:
+          type: number
+          description: Giá sản phẩm
+          example: 350000
+          minimum: 0.0
+      required:
+      - name
+      - price
+    ProblemDetail:
+      type: object
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+          format: int32
+        detail:
+          type: string
+        instance:
+          type: string
+          format: uri
+        properties:
+          type: object
+          additionalProperties: {}
+    ProductResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Mã sản phẩm
+          example: 1
+        name:
+          type: string
+          description: Tên sản phẩm
+          example: Chuột không dây
+        description:
+          type: string
+          description: Mô tả sản phẩm
+          example: 2.4GHz
+        price:
+          type: number
+          description: Giá sản phẩm
+          example: 350000.0
+        createdAt:
+          type: string
+          format: date-time
+          description: Thời điểm tạo
+        updatedAt:
+          type: string
+          format: date-time
+          description: Thời điểm cập nhật
+    LoginRequest:
+      type: object
+      properties:
+        username:
+          type: string
+          description: Tên đăng nhập
+          example: admin
+          minLength: 1
+        password:
+          type: string
+          description: Mật khẩu
+          example: Admin#Catalog2026
+          minLength: 1
+      required:
+      - password
+      - username
+    TokenResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+          description: JWT dùng trong header Authorization
+        tokenType:
+          type: string
+          description: Loại token
+          example: Bearer
+        expiresIn:
+          type: integer
+          format: int64
+          description: Số giây còn hiệu lực
+          example: 900
+        refreshToken:
+          type: string
+          description: Refresh token 256-bit ngẫu nhiên dùng để cấp lại access token
+            mới
+    RefreshTokenRequest:
+      type: object
+      properties:
+        refreshToken:
+          type: string
+          description: Refresh token dạng raw nhận được khi đăng nhập hoặc refresh
+            lần trước
+          minLength: 1
+      required:
+      - refreshToken
+    LogoutRequest:
+      type: object
+      properties:
+        refreshToken:
+          type: string
+          description: Refresh token cần thu hồi (tùy chọn)
+    ChangePasswordRequest:
+      type: object
+      properties:
+        currentPassword:
+          type: string
+          description: Mật khẩu hiện tại
+          example: Admin#Catalog2026
+          minLength: 1
+        newPassword:
+          type: string
+          description: Mật khẩu mới
+          example: NewAdmin#Password2026
+          maxLength: 2147483647
+          minLength: 6
+      required:
+      - currentPassword
+      - newPassword
+    MeResponse:
+      type: object
+      properties:
+        username:
+          type: string
+          description: Tên đăng nhập
+          example: admin
+        roles:
+          type: array
+          description: Danh sách vai trò
+          example:
+          - ROLE_USER
+          - ROLE_ADMIN
+          items:
+            type: string
+        expiresAt:
+          type: string
+          format: date-time
+          description: Thời điểm hết hạn của access token
+  securitySchemes:
+    bearerAuth:
+      type: http
+      description: Lấy token từ POST /api/auth/token rồi dán vào đây (không kèm chữ
+        Bearer)
+      scheme: bearer
+      bearerFormat: JWT
